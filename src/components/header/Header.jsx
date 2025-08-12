@@ -1,19 +1,17 @@
+// src/components/header/Header.jsx
 import * as React from "react";
-import { styled, alpha } from "@mui/material/styles";
-import AppBar from "@mui/material/AppBar";
-import Box from "@mui/material/Box";
-import Toolbar from "@mui/material/Toolbar";
-import IconButton from "@mui/material/IconButton";
-import InputBase from "@mui/material/InputBase";
-import Badge from "@mui/material/Badge";
-import MenuItem from "@mui/material/MenuItem";
-import Menu from "@mui/material/Menu";
+import { alpha, styled } from "@mui/material/styles";
+import {
+  AppBar, Box, Toolbar, IconButton, Typography, InputBase,
+  Menu, MenuItem, Avatar
+} from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import AccountCircle from "@mui/icons-material/AccountCircle";
-import MailIcon from "@mui/icons-material/Mail";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import MoreIcon from "@mui/icons-material/MoreVert";
-import { logOut } from "../../services/authenticationService";
+import HomeIcon from "@mui/icons-material/Home";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
+import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
+import { useNavigate } from "react-router-dom";
+import { getToken, removeToken } from "../../services/localStorageService";
 
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
@@ -22,11 +20,10 @@ const Search = styled("div")(({ theme }) => ({
   "&:hover": {
     backgroundColor: alpha(theme.palette.common.white, 0.25),
   },
-  marginRight: theme.spacing(2),
   marginLeft: 0,
   width: "100%",
   [theme.breakpoints.up("sm")]: {
-    marginLeft: theme.spacing(3),
+    marginLeft: theme.spacing(1),
     width: "auto",
   },
 }));
@@ -45,120 +42,58 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   color: "inherit",
   "& .MuiInputBase-input": {
     padding: theme.spacing(1, 1, 1, 0),
-    // vertical padding + font size from searchIcon
     paddingLeft: `calc(1em + ${theme.spacing(4)})`,
     transition: theme.transitions.create("width"),
     width: "100%",
     [theme.breakpoints.up("md")]: {
-      width: "20ch",
+      width: "30ch",
     },
   },
 }));
 
-export default function Header() {
+export default function Header({ onSearchResult, cartCount = 0 }) {
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = React.useState("");
+
   const [anchorEl, setAnchorEl] = React.useState(null);
-  const [mobileMoreAnchorEl, setMobileMoreAnchorEl] = React.useState(null);
+  const open = Boolean(anchorEl);
+  const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
 
-  const isMenuOpen = Boolean(anchorEl);
-  const isMobileMenuOpen = Boolean(mobileMoreAnchorEl);
-
-  const handleProfileMenuOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMobileMenuClose = () => {
-    setMobileMoreAnchorEl(null);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    handleMobileMenuClose();
-  };
-
-  const handleMobileMenuOpen = (event) => {
-    setMobileMoreAnchorEl(event.currentTarget);
-  };
-
-  const handleLogout = (event) => {
+  const handleLogout = () => {
+    removeToken();
+    navigate("/login");
     handleMenuClose();
-    logOut();
-    window.location.href = "/login";
   };
 
-  const menuId = "primary-search-account-menu";
-  const renderMenu = (
-    <Menu
-      anchorEl={anchorEl}
-      anchorOrigin={{
-        vertical: "top",
-        horizontal: "right",
-      }}
-      id={menuId}
-      keepMounted
-      transformOrigin={{
-        vertical: "top",
-        horizontal: "right",
-      }}
-      open={isMenuOpen}
-      onClose={handleMenuClose}
-    >
-      <MenuItem onClick={handleMenuClose}>Profile</MenuItem>
-      <MenuItem onClick={handleMenuClose}>Settings</MenuItem>
-      <MenuItem onClick={handleLogout}>Log Out</MenuItem>
-    </Menu>
-  );
+  const handleGoToProfile = () => {
+    navigate("/profile");
+    handleMenuClose();
+  };
 
-  const mobileMenuId = "primary-search-account-menu-mobile";
-  const renderMobileMenu = (
-    <Menu
-      anchorEl={mobileMoreAnchorEl}
-      anchorOrigin={{
-        vertical: "top",
-        horizontal: "right",
-      }}
-      id={mobileMenuId}
-      keepMounted
-      transformOrigin={{
-        vertical: "top",
-        horizontal: "right",
-      }}
-      open={isMobileMenuOpen}
-      onClose={handleMobileMenuClose}
-    >
-      <MenuItem>
-        <IconButton size="large" aria-label="show 2 new mails" color="inherit">
-          <Badge badgeContent={2} color="error">
-            <MailIcon />
-          </Badge>
-        </IconButton>
-        <p>Messages</p>
-      </MenuItem>
-      <MenuItem>
-        <IconButton
-          size="large"
-          aria-label="show 4 new notifications"
-          color="inherit"
-        >
-          <Badge badgeContent={4} color="error">
-            <NotificationsIcon />
-          </Badge>
-        </IconButton>
-        <p>Notifications</p>
-      </MenuItem>
-      <MenuItem onClick={handleProfileMenuOpen}>
-        <IconButton
-          size="large"
-          aria-label="account of current user"
-          aria-controls="primary-search-account-menu"
-          aria-haspopup="true"
-          color="inherit"
-        >
-          <AccountCircle />
-        </IconButton>
-        <p>Profile</p>
-      </MenuItem>
-    </Menu>
-  );
+  const handleNavigateFines = () => {
+    navigate("/fines");
+  };
+
+  const handleKeyDown = async (e) => {
+    if (e.key === "Enter" && searchQuery.trim() !== "") {
+      try {
+        const res = await fetch(`http://localhost:8080/spring/books/search?query=${searchQuery}`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        const data = await res.json();
+        if (onSearchResult && Array.isArray(data.status)) {
+          onSearchResult(data.status);
+        }
+      } catch (err) {
+        console.error("Lỗi tìm kiếm:", err);
+      }
+    }
+  };
+
+  const handleOpenLoans = () => {
+    navigate("/confirmed-loans");
+  };
 
   return (
     <Box sx={{ flexGrow: 1 }}>
@@ -168,76 +103,113 @@ export default function Header() {
             size="large"
             edge="start"
             color="inherit"
-            aria-label="open drawer"
-            sx={{ mr: 2 }}
+            onClick={async () => {
+              navigate("/");
+              setSearchQuery("");
+              try {
+                const res = await fetch("http://localhost:8080/spring/books", {
+                  headers: { Authorization: `Bearer ${getToken()}` },
+                });
+                const data = await res.json();
+                if (onSearchResult && Array.isArray(data.status)) {
+                  onSearchResult(data.status);
+                }
+              } catch (err) {
+                console.error("Lỗi khi load toàn bộ sách:", err);
+              }
+            }}
           >
-            <Box
-              component={"img"}
-              style={{
-                width: "35px",
-                height: "35px",
-                borderRadius: 6,
-              }}
-              src=""
-            ></Box>
+            <HomeIcon />
           </IconButton>
+
+          <Typography variant="h6" noWrap sx={{ flexGrow: 1, display: { xs: "none", sm: "block" } }}>
+            Library App
+          </Typography>
+
           <Search>
             <SearchIconWrapper>
               <SearchIcon />
             </SearchIconWrapper>
             <StyledInputBase
-              placeholder="Search…"
-              inputProps={{ "aria-label": "search" }}
+              placeholder="Tìm kiếm sách..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
             />
           </Search>
-          <Box sx={{ flexGrow: 1 }} />
-          <Box sx={{ display: { xs: "none", md: "flex" } }}>
-            <IconButton
-              size="large"
-              aria-label="show 4 new mails"
-              color="inherit"
-            >
-              <Badge badgeContent={4} color="error">
-                <MailIcon />
-              </Badge>
-            </IconButton>
-            <IconButton
-              size="large"
-              aria-label="show 17 new notifications"
-              color="inherit"
-            >
-              <Badge badgeContent={17} color="error">
-                <NotificationsIcon />
-              </Badge>
-            </IconButton>
-            <IconButton
-              size="large"
-              edge="end"
-              aria-label="account of current user"
-              aria-controls={menuId}
-              aria-haspopup="true"
-              onClick={handleProfileMenuOpen}
-              color="inherit"
-            >
-              <AccountCircle />
+
+          {/* Giỏ hàng */}
+          <Box sx={{ ml: 2, position: "relative" }}>
+            <IconButton color="inherit" onClick={() => navigate("/cart")}>
+              <ShoppingCartIcon />
+              {cartCount > 0 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 2,
+                    right: 2,
+                    backgroundColor: "red",
+                    color: "white",
+                    borderRadius: "50%",
+                    padding: "2px 6px",
+                    fontSize: "12px",
+                    fontWeight: "bold"
+                  }}
+                >
+                  {cartCount}
+                </span>
+              )}
             </IconButton>
           </Box>
-          <Box sx={{ display: { xs: "flex", md: "none" } }}>
-            <IconButton
-              size="large"
-              aria-label="show more"
-              aria-controls={mobileMenuId}
-              aria-haspopup="true"
-              onClick={handleMobileMenuOpen}
-              color="inherit"
-            >
-              <MoreIcon />
+
+          {/* Icon tiền phạt */}
+          <IconButton color="inherit" onClick={handleNavigateFines}>
+            <MonetizationOnIcon />
+          </IconButton>
+
+          {/* Đơn mượn confirmed */}
+          <Box sx={{ ml: 2 }}>
+            <IconButton color="inherit" onClick={handleOpenLoans}>
+              <AssignmentTurnedInIcon />
             </IconButton>
+          </Box>
+
+          {/* Avatar menu */}
+          <Box sx={{ ml: 2 }}>
+            <IconButton onClick={handleMenuOpen} size="small">
+              <Avatar />
+            </IconButton>
+            <Menu
+              anchorEl={anchorEl}
+              open={open}
+              onClose={handleMenuClose}
+              PaperProps={{
+                sx: {
+                  mt: 1.5,
+                  overflow: "visible",
+                  filter: "drop-shadow(0px 2px 8px rgba(0,0,0,0.1))",
+                  "&:before": {
+                    content: '""',
+                    position: "absolute",
+                    top: 0,
+                    right: 14,
+                    width: 10,
+                    height: 10,
+                    bgcolor: "background.paper",
+                    transform: "translateY(-50%) rotate(45deg)",
+                    zIndex: 0,
+                  },
+                },
+              }}
+              transformOrigin={{ horizontal: "right", vertical: "top" }}
+              anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+            >
+              <MenuItem onClick={handleGoToProfile}>👤 Hồ sơ</MenuItem>
+              <MenuItem onClick={handleLogout}>🚪 Đăng xuất</MenuItem>
+            </Menu>
           </Box>
         </Toolbar>
       </AppBar>
-      {renderMobileMenu}
-      {renderMenu}
     </Box>
   );
 }

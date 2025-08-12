@@ -7,6 +7,8 @@ import {
   Typography,
   Box,
   Paper,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 
 function ResetPassword() {
@@ -16,6 +18,7 @@ function ResetPassword() {
 
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,41 +35,41 @@ function ResetPassword() {
       const data = await response.json();
 
       if (data.code === 1000) {
-        alert("Password has been reset successfully!");
-        navigate("/login");
+        setSnackbar({ open: true, message: "Đổi mật khẩu thành công!", severity: "success" });
+        setTimeout(() => navigate("/login"), 1500);
       } else {
-        alert(data.message || "Reset failed!");
+        throw new Error(data.message || "Đổi mật khẩu thất bại.");
       }
-    } catch (error) {
-      alert("Error: " + error.message);
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: "error" });
     }
   };
 
   if (!email) {
     return (
-      <Container maxWidth="sm" sx={{ mt: 8 }}>
-        <Paper elevation={3} sx={{ p: 4 }}>
+      <Box display="flex" justifyContent="center" alignItems="center" height="100vh" bgcolor="#f4f6f8">
+        <Paper elevation={4} sx={{ p: 4, minWidth: 300, maxWidth: 450 }}>
           <Typography variant="h6" align="center">
-            Email not provided. Please go back and try again.
+            Không có email. Vui lòng quay lại và thử lại.
           </Typography>
           <Box textAlign="center" mt={2}>
             <Button variant="contained" onClick={() => navigate("/forgot-password")}>
-              Back
+              Quay lại
             </Button>
           </Box>
         </Paper>
-      </Container>
+      </Box>
     );
   }
 
   return (
-    <Container maxWidth="sm" sx={{ mt: 8 }}>
-      <Paper elevation={3} sx={{ p: 4 }}>
-        <Typography variant="h5" gutterBottom align="center">
-          Reset Your Password
+    <Box display="flex" justifyContent="center" alignItems="center" height="100vh" bgcolor="#f4f6f8">
+      <Paper elevation={6} sx={{ p: 4, minWidth: 360, maxWidth: 500 }}>
+        <Typography variant="h5" align="center" gutterBottom>
+          🔐 Đặt lại mật khẩu
         </Typography>
+
         <form onSubmit={handleSubmit}>
-          {/* Hiển thị email dưới dạng disabled nếu muốn */}
           <TextField
             label="Email"
             fullWidth
@@ -75,7 +78,7 @@ function ResetPassword() {
             disabled
           />
           <TextField
-            label="Verification Code"
+            label="Mã xác nhận"
             fullWidth
             margin="normal"
             value={code}
@@ -83,7 +86,7 @@ function ResetPassword() {
             required
           />
           <TextField
-            label="New Password"
+            label="Mật khẩu mới"
             type="password"
             fullWidth
             margin="normal"
@@ -91,14 +94,37 @@ function ResetPassword() {
             onChange={(e) => setNewPassword(e.target.value)}
             required
           />
-          <Box textAlign="center" mt={2}>
-            <Button type="submit" variant="contained" color="primary">
-              Reset Password
-            </Button>
-          </Box>
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            color="primary"
+            sx={{ mt: 2 }}
+          >
+            ✅ Đổi mật khẩu
+          </Button>
+          <Button
+            variant="text"
+            fullWidth
+            sx={{ mt: 1 }}
+            onClick={() => navigate("/login")}
+          >
+            🔙 Quay lại đăng nhập
+          </Button>
         </form>
       </Paper>
-    </Container>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={5000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Alert severity={snackbar.severity} variant="filled">
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
   );
 }
 
