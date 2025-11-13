@@ -1,16 +1,16 @@
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
-import Login from "../components/Login";
-import Home from "../components/Home";
-import ForgotPassword from "../components/ForgotPassword";
-import ResetPassword from "../components/ResetPassword";
-import CategoryList from '../components/categories/CategoryList';
-import BookListByCategory from '../components/categories/BookListByCategory';
-import BookDetail from '../components/books/BookDetail';
-import Profile from "../components/Profile";
-import BookInfo from "../components/books/BookInfo";
-import Cart from "../components/books/Cart";   // <- Import trang Cart
-import ConfirmedLoans from "../components/books/ConfirmedLoans";
-import FinesPage from "../components/FinesPage";
+import Login from "../pages/auth/Login";
+import Home from "../pages/home/Home";
+import ForgotPassword from "../pages/auth/ForgotPassword"
+import ResetPassword from "../pages/auth/ResetPassword"
+import CategoryList from "../pages/categorys/CategoryList"
+import BookListByCategory from '../pages/categorys/BookListByCategory';
+import BookDetail from '../pages/books/BookDetail';
+import Profile from "../pages/profile/Profile";
+import BookInfo from "../pages/books/BookInfo";
+import Cart from "../pages/cart/Cart";   
+import ConfirmedLoans from "../pages/loans/ConfirmedLoans";
+import FinesPage from "../pages/fines/FinesPage";
 
 const AppRoutes = () => {
   return (

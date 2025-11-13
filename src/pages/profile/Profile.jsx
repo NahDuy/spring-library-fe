@@ -7,8 +7,8 @@ import {
   CircularProgress,
   Avatar,
 } from "@mui/material";
-import { getToken } from "../services/localStorageService";
-import Header from "../components/header/Header";
+import { getToken } from "../../services/localStorageService";
+import Header from "../../components/header/Header";
 
 export default function Profile() {
   const [user, setUser] = useState(null);

@@ -5,7 +5,7 @@ import {
     Box, Typography, Button, TextField,
     Card, CardContent, CardMedia
 } from "@mui/material";
-import Header from "../header/Header";
+import Header from "../../components/header/Header";
 import { getToken } from "../../services/localStorageService";
 
 export default function BookInfo() {

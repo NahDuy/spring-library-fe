@@ -1,8 +1,8 @@
 // File: Home.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getToken } from "../services/localStorageService";
-import Header from "./header/Header";
+import { getToken } from "../../services/localStorageService";
+import Header from "../../components/header/Header";
 import {
   Box, Card, CircularProgress, Typography, Grid,
   CardMedia, CardContent, FormControl, InputLabel, Select, MenuItem

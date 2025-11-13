@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getToken } from "../services/localStorageService";
+
 import {
   Box,
   Typography,
@@ -9,8 +9,8 @@ import {
   Grid,
   Chip
 } from "@mui/material";
-import Header from "../components/header/Header";
-
+import Header from "../../components/header/Header";
+import { getToken } from "../../services/localStorageService";
 export default function FinesPage() {
   const [fines, setFines] = useState([]);
   const [loanDetails, setLoanDetails] = useState([]);
@@ -64,20 +64,33 @@ export default function FinesPage() {
     setFines(finesList);
   };
 
-  // ✅ Thanh toán
-  const handlePayFine = async (fineId) => {
+  // ✅ Thanh toán VNPay QR
+  const handlePayFine = async (fine) => {
     try {
-      await fetch(`http://localhost:8080/spring/fine/pay/${fineId}`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      alert("✅ Thanh toán thành công!");
-      fetchFinesForLoanDetails();
+      const amount = fine.amount; // số tiền phạt
+      console.log("Thanh toán VNPay, amount =", amount);
+
+      const res = await fetch(
+        `http://localhost:8080/spring/payment/vn-pay?amount=${amount}`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${getToken()}` },
+        }
+      );
+
+      const data = await res.json();
+
+      if (data?.status.paymentUrl) {
+        window.location.href = data.status.paymentUrl; // ⬅️ Redirect sang VNPAY
+      } else {
+        alert("❌ Không lấy được URL thanh toán!");
+      }
     } catch (err) {
-      console.error("Lỗi thanh toán:", err);
+      console.error("Lỗi thanh toán VNPay:", err);
       alert("Thanh toán thất bại!");
     }
   };
+
 
   // ✅ Load dữ liệu
   useEffect(() => {
@@ -133,7 +146,7 @@ export default function FinesPage() {
                         color="primary"
                         fullWidth
                         sx={{ mt: 2 }}
-                        onClick={() => handlePayFine(fine.fineId)}
+                        onClick={() => handlePayFine(fine)}
                       >
                         💳 Thanh toán
                       </Button>

@@ -12,7 +12,7 @@ import {
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getToken, setToken } from "../services/localStorageService";
+import { getToken, setToken } from "../../services/localStorageService";
 
 export default function Login() {
   const navigate = useNavigate();

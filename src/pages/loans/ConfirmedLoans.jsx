@@ -18,8 +18,7 @@ import {
   Grid,
   Chip
 } from "@mui/material";
-import Header from "../header/Header";
-
+import Header from "../../components/header/Header";
 export default function ConfirmedLoans() {
   const navigate = useNavigate();
   const [loans, setLoans] = useState([]);

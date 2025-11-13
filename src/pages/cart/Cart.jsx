@@ -16,8 +16,7 @@ import {
     Divider
 } from "@mui/material";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
-import Header from "../header/Header";
-
+import Header from "../../components/header/Header";
 export default function Cart() {
     const navigate = useNavigate();
     const [loan, setLoan] = useState(null);
