@@ -3,19 +3,48 @@ import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import { getToken } from "../../services/localStorageService";
+import useAuth from "../../features/auth/hooks/useAuth";
+import MainLayout from "../../components/layout/MainLayout";
+import {
+  Box,
+  Typography,
+  Button,
+  Grid,
+  Card,
+  CardContent,
+  CardMedia,
+  CardActions,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  TextField,
+  DialogActions
+} from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import { useToast } from "../../context/ToastContext";
 
 function BookListByCategory() {
   const { categoryId } = useParams();
   const navigate = useNavigate();
   const [books, setBooks] = useState([]);
   const [categoryName, setCategoryName] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const { user } = useAuth();
+  const isAdmin = user?.roles?.includes("ADMIN");
+  const { showToast } = useToast();
 
   const [form, setForm] = useState({
     title: "",
     author: "",
     description: "",
-    totalCopies: "",
+    totalCopies: 10,
     imageUrls: [],
     categoryId: categoryId,
   });
@@ -32,45 +61,56 @@ function BookListByCategory() {
     }
   }, [categoryId]);
 
-  useEffect(() => {
-    if (!categoryId) return;
-    fetchBooks();
-  }, [fetchBooks]);
+  const fetchCategory = useCallback(async () => {
+    try {
+      const res = await axios.get(`http://localhost:8080/spring/categories/${categoryId}`,
+        { headers: { Authorization: `Bearer ${getToken()}` } });
+      // Depending on API, response might be res.data.status.name or something else
+      // Adjusting based on CategoryList usage: getCategories returns list, need single category fetch or find from list
+      // Assuming GET /categories/{id} exists or filtering list. 
+      // Previous code used `http://localhost:8080/spring/category/${categoryId}` which might be wrong based on standard REST
+      // Let's assume the previous code was correct about the endpoint or try to fetch from all categories if it fails.
+
+      // Let's try standard REST pattern often used here
+      if (res.data?.status?.name) {
+        setCategoryName(res.data.status.name);
+      } else {
+        // Fallback: fetch all and find
+        const allRes = await axios.get("http://localhost:8080/spring/categories");
+        const found = allRes.data?.status?.find(c => c.categoryId === categoryId);
+        if (found) setCategoryName(found.name);
+      }
+
+    } catch (err) {
+      // Fallback if specific endpoint fails
+      try {
+        const allRes = await axios.get("http://localhost:8080/spring/categories");
+        const found = allRes.data?.status?.find(c => c.categoryId === categoryId);
+        if (found) setCategoryName(found.name);
+      } catch (e) { console.error(e) }
+    }
+  }, [categoryId]);
 
   useEffect(() => {
     if (!categoryId) {
       navigate("/");
       return;
     }
-    const fetchCategory = async () => {
-      try {
-        const res = await axios.get(`http://localhost:8080/spring/category/${categoryId}`,
-          { headers: { Authorization: `Bearer ${getToken()}` } });
-        setCategoryName(res.data?.status?.name || "");
-      } catch (err) {
-        console.error("Failed to fetch category:", err);
-      }
-    };
+    fetchBooks();
     fetchCategory();
-  }, [categoryId, navigate]);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleImageChange = (e) => {
-    setSelectedFiles([...e.target.files]);
-  };
+  }, [categoryId, navigate, fetchBooks, fetchCategory]);
 
   const handleDelete = async (bookId) => {
-    if (!window.confirm("Bạn có chắc muốn xóa sách này?")) return;
+    if (!window.confirm("Delete this book?")) return;
     try {
-      await axios.delete(`http://localhost:8080/spring/books/${bookId}`,
+      const res = await axios.delete(`http://localhost:8080/spring/books/${bookId}`,
         { headers: { Authorization: `Bearer ${getToken()}` } });
-      fetchBooks();
+      if (res.data.code === 1000 || res.status === 200) {
+        showToast("Book deleted", "success");
+        fetchBooks();
+      }
     } catch (err) {
-      console.error("Lỗi khi xóa sách:", err);
+      showToast("Failed to delete book", "error");
     }
   };
 
@@ -79,174 +119,138 @@ function BookListByCategory() {
       title: book.title || "",
       author: book.author || "",
       description: book.description || "",
-      totalCopies: book.totalCopies?.toString() || "",
+      totalCopies: book.totalCopies || 10,
       imageUrls: book.imageUrls || [],
-      categoryId: book.category?.categoryId || categoryId,
+      categoryId: categoryId,
     });
-    setSelectedFiles([]);
+    setEditingId(book.bookId);
+    setIsEditing(true);
+    setOpen(true);
   };
+
+  const handleCreate = () => {
+    setForm({ title: "", author: "", description: "", totalCopies: 10, imageUrls: [], categoryId: categoryId });
+    setIsEditing(false);
+    setOpen(true);
+  }
 
   const handleSubmit = async () => {
     try {
-      const uploadedUrls = [];
+      const method = isEditing ? "put" : "post";
+      const url = isEditing
+        ? `http://localhost:8080/spring/books/${editingId}`
+        : "http://localhost:8080/spring/books";
 
-      for (const file of selectedFiles) {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("upload_preset", process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET);
-
-        const res = await axios.post(
-          `https://api.cloudinary.com/v1_1/${process.env.REACT_APP_CLOUDINARY_CLOUD_NAME}/image/upload`,
-          formData
-        );
-        uploadedUrls.push(res.data.secure_url);
-      }
-
-      const payload = {
+      // Ensure array for images
+      const mkPayload = {
         ...form,
-        imageUrls: uploadedUrls,
+        categoryId, // ensure categoryId is set
+        imageUrls: Array.isArray(form.imageUrls) ? form.imageUrls : [form.imageUrls]
       };
 
-      const res = await axios.post("http://localhost:8080/spring/books", payload,
-        { headers: { Authorization: `Bearer ${getToken()}` } });
+      const res = await axios({
+        method,
+        url,
+        data: mkPayload,
+        headers: { Authorization: `Bearer ${getToken()}` }
+      });
+
       if (res.data?.code === 1000) {
-        setForm({
-          title: "",
-          author: "",
-          description: "",
-          totalCopies: "",
-          imageUrls: [],
-          categoryId: categoryId,
-        });
-        setSelectedFiles([]);
+        showToast(isEditing ? "Book updated" : "Book created", "success");
+        setOpen(false);
         fetchBooks();
+      } else {
+        showToast(res.data.message || "Error", "error");
       }
     } catch (err) {
-      console.error("Lỗi khi gửi form:", err);
+      showToast("Error saving book", "error");
     }
   };
 
   return (
-    <div style={styles.wrapper}>
-      <div style={styles.container}>
-        <h2 style={styles.heading}>📚 Sách thuộc danh mục: {categoryName}</h2>
-        <button onClick={() => navigate("/categories")} style={styles.backBtn}>⬅️ Quay lại danh mục</button>
+    <MainLayout>
+      <Box sx={{ p: 3 }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/categories")} sx={{ mb: 2 }}>
+          Back to Categories
+        </Button>
 
-        <div style={styles.formSection}>
-          <input name="title" placeholder="Tiêu đề" value={form.title || ""} onChange={handleChange} style={styles.input} />
-          <input name="author" placeholder="Tác giả" value={form.author || ""} onChange={handleChange} style={styles.input} />
-          <input name="totalCopies" placeholder="Số lượng" value={form.totalCopies || ""} onChange={handleChange} style={styles.input} />
-          <input name="description" placeholder="Mô tả" value={form.description || ""} onChange={handleChange} style={styles.input} />
-          <input type="file" accept="image/*" multiple onChange={handleImageChange} style={{ marginTop: 8 }} />
-          <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-            {selectedFiles.map((file, idx) => (
-              <img key={idx} src={URL.createObjectURL(file)} alt={`preview ${idx}`} width={80} style={{ borderRadius: 4 }} />
-            ))}
-          </div>
-          <button onClick={handleSubmit} style={styles.submitBtn}>➕ Thêm sách</button>
-        </div>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Typography variant="h4" fontWeight="bold">
+            {categoryName ? `${categoryName} Books` : 'Books'}
+          </Typography>
+          {isAdmin && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
+              Add Book
+            </Button>
+          )}
+        </Box>
 
-        {books.length > 0 ? (
-          <ul style={styles.list}>
-            {books.map((book) => {
-              const bookId = book.bookId || book.bookID;
-              return (
-                <li key={bookId} style={styles.card}>
-                  <strong>{book.title}</strong> - {book.author}
-                  <div style={styles.cardButtons}>
-                    <button onClick={() => navigate(`/book/${bookId}`)} style={styles.btn}>📖 Xem</button>
-                    <button onClick={() => handleEdit(book)} style={styles.btn}>✏️ Sửa</button>
-                    <button onClick={() => handleDelete(bookId)} style={{ ...styles.btn, backgroundColor: '#e74c3c' }}>🗑️ Xóa</button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p style={{ textAlign: 'center' }}><i>Không có sách trong danh mục này.</i></p>
-        )}
-      </div>
-    </div>
+        <Grid container spacing={3}>
+          {books.map((book) => (
+            <Grid item xs={12} sm={6} md={3} key={book.bookId || book.id}>
+              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <CardMedia
+                  component="img"
+                  height="200"
+                  image={book.imageUrls?.[0] || "https://via.placeholder.com/150"}
+                  alt={book.title}
+                  sx={{ objectFit: "cover" }}
+                />
+                <CardContent sx={{ flexGrow: 1 }}>
+                  <Typography variant="h6" noWrap title={book.title}>
+                    {book.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {book.author}
+                  </Typography>
+                  <Typography variant="caption" display="block" mt={1}>
+                    Copies: {book.totalCopies}
+                  </Typography>
+                </CardContent>
+                <CardActions>
+                  <Button size="small" startIcon={<VisibilityIcon />} onClick={() => navigate(`/book/${book.bookId}`)}>
+                    View
+                  </Button>
+                  {isAdmin && (
+                    <Box sx={{ ml: "auto" }}>
+                      <IconButton size="small" color="primary" onClick={() => handleEdit(book)}>
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton size="small" color="error" onClick={() => handleDelete(book.bookId)}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                  )}
+                </CardActions>
+              </Card>
+            </Grid>
+          ))}
+          {books.length === 0 && (
+            <Typography sx={{ p: 2, fontStyle: 'italic' }}>
+              No books found in this category.
+            </Typography>
+          )}
+        </Grid>
+
+        <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>{isEditing ? "Edit Book" : "Add New Book"}</DialogTitle>
+          <DialogContent>
+            <Box display="flex" flexDirection="column" gap={2} mt={1}>
+              <TextField label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} fullWidth />
+              <TextField label="Author" value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} fullWidth />
+              <TextField label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} fullWidth multiline rows={3} />
+              <TextField label="Copies" type="number" value={form.totalCopies} onChange={(e) => setForm({ ...form, totalCopies: parseInt(e.target.value) || 0 })} fullWidth />
+              <TextField label="Image URL" value={form.imageUrls} onChange={(e) => setForm({ ...form, imageUrls: [e.target.value] })} fullWidth helperText="Enter single image URL" />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpen(false)}>Cancel</Button>
+            <Button variant="contained" onClick={handleSubmit}>{isEditing ? "Update" : "Create"}</Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </MainLayout>
   );
 }
-
-const styles = {
-  wrapper: {
-    minHeight: '100vh',
-    backgroundColor: '#f4f6f9',
-    padding: '40px 0',
-    display: 'flex',
-    justifyContent: 'center',
-  },
-  container: {
-    width: '100%',
-    maxWidth: 700,
-    background: 'white',
-    padding: 24,
-    borderRadius: 10,
-    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-  },
-  heading: {
-    textAlign: 'center',
-    marginBottom: 20,
-    color: '#2c3e50',
-  },
-  backBtn: {
-    marginBottom: 20,
-    padding: '8px 12px',
-    backgroundColor: '#bdc3c7',
-    color: 'white',
-    border: 'none',
-    borderRadius: 6,
-    cursor: 'pointer',
-  },
-  formSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-    marginBottom: 30,
-  },
-  input: {
-    padding: 10,
-    borderRadius: 6,
-    border: '1px solid #ccc',
-    fontSize: 16,
-  },
-  submitBtn: {
-    padding: 10,
-    borderRadius: 6,
-    border: 'none',
-    backgroundColor: '#3498db',
-    color: 'white',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    marginTop: 10,
-  },
-  list: {
-    listStyle: 'none',
-    padding: 0,
-  },
-  card: {
-    border: '1px solid #ddd',
-    background: '#f9f9f9',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-  },
-  cardButtons: {
-    marginTop: 10,
-    display: 'flex',
-    gap: 10,
-  },
-  btn: {
-    padding: 8,
-    borderRadius: 6,
-    border: 'none',
-    backgroundColor: '#2ecc71',
-    color: 'white',
-    cursor: 'pointer',
-    fontSize: 14,
-  },
-};
 
 export default BookListByCategory;

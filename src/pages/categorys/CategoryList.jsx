@@ -6,18 +6,47 @@ import {
   updateCategory,
   deleteCategory,
 } from '../../services/api';
+import useAuth from '../../features/auth/hooks/useAuth';
+import MainLayout from '../../components/layout/MainLayout';
+import {
+  Box,
+  Typography,
+  Grid,
+  Card,
+  CardContent,
+  CardActions,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  TextField,
+  DialogActions,
+  IconButton
+} from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
+import { useToast } from '../../context/ToastContext';
 
 export default function CategoryList() {
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState({ name: '', description: '' });
+  const [open, setOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.roles?.includes("ADMIN");
+  const { showToast } = useToast();
 
   const fetchCategories = async () => {
-    const res = await getCategories();
-    if (res.data.code === 1000) {
-      setCategories(res.data.status || []);
-    } else {
-      console.error('Lỗi khi lấy danh sách category:', res.data);
+    try {
+      const res = await getCategories();
+      if (res.data.code === 1000) {
+        setCategories(res.data.status || []);
+      }
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -26,147 +55,128 @@ export default function CategoryList() {
   }, []);
 
   const handleSubmit = async () => {
-    if (form.categoryId) {
-      await updateCategory(form.categoryId, form);
-    } else {
-      await createCategory(form);
+    try {
+      if (form.categoryId) {
+        await updateCategory(form.categoryId, form);
+        showToast('Category updated', 'success');
+      } else {
+        await createCategory(form);
+        showToast('Category created', 'success');
+      }
+      setForm({ name: '', description: '' });
+      setOpen(false);
+      fetchCategories();
+    } catch (error) {
+      showToast('Error saving category', 'error');
     }
-    setForm({ name: '', description: '' });
-    fetchCategories();
   };
+
+  const handleCreate = () => {
+    setForm({ name: '', description: '' });
+    setIsEditing(false);
+    setOpen(true);
+  }
 
   const handleEdit = (cat) => {
     setForm(cat);
+    setIsEditing(true);
+    setOpen(true);
   };
 
   const handleDelete = async (id) => {
-    await deleteCategory(id);
-    fetchCategories();
+    if (!window.confirm('Delete this category?')) return;
+    try {
+      await deleteCategory(id);
+      showToast('Category deleted', 'success');
+      fetchCategories();
+    } catch (error) {
+      showToast('Error deleting category', 'error');
+    }
   };
 
   const handleViewBooks = (catId) => {
-    if (!catId) return alert('Category ID is invalid!');
     navigate(`/books/${catId}`);
   };
 
   return (
-    <div style={styles.wrapper}>
-      <div style={styles.container}>
-        <h2 style={styles.heading}>📚 Quản lý danh mục</h2>
+    <MainLayout>
+      <Box sx={{ p: 3 }}>
+        <Box display="flex" justifyContent="space-between" mb={3} alignItems="center">
+          <Typography variant="h4" fontWeight="bold">
+            📚 Categories
+          </Typography>
+          {isAdmin && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
+              Add Category
+            </Button>
+          )}
+        </Box>
 
-        <div style={styles.formSection}>
-          <input
-            placeholder="Tên danh mục"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            style={styles.input}
-          />
-          <input
-            placeholder="Mô tả"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            style={styles.input}
-          />
-          <button onClick={handleSubmit} style={styles.createBtn}>
-            {form.categoryId ? '📝 Cập nhật' : '➕ Tạo mới'}
-          </button>
-        </div>
+        <Grid container spacing={3}>
+          {categories.map((cat) => (
+            <Grid item xs={12} sm={6} md={4} key={cat.categoryId}>
+              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <CardContent sx={{ flexGrow: 1 }}>
+                  <Typography variant="h6" fontWeight="bold" gutterBottom>
+                    {cat.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {cat.description}
+                  </Typography>
+                </CardContent>
+                <CardActions>
+                  <Button size="small" startIcon={<MenuBookIcon />} onClick={() => handleViewBooks(cat.categoryId)}>
+                    View Books
+                  </Button>
+                  {isAdmin && (
+                    <Box sx={{ ml: 'auto' }}>
+                      <IconButton size="small" color="primary" onClick={() => handleEdit(cat)}>
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton size="small" color="error" onClick={() => handleDelete(cat.categoryId)}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                  )}
+                </CardActions>
+              </Card>
+            </Grid>
+          ))}
+          {categories.length === 0 && (
+            <Typography sx={{ p: 2, fontStyle: 'italic', color: 'text.secondary' }}>
+              No categories found.
+            </Typography>
+          )}
+        </Grid>
 
-        {categories.length > 0 ? (
-          <ul style={styles.list}>
-            {categories.map((cat) => (
-              <li key={cat.categoryId} style={styles.card}>
-                <h3 style={styles.cardTitle}>{cat.name}</h3>
-                <p style={{ margin: '6px 0' }}>{cat.description}</p>
-                <div style={styles.btnGroup}>
-                  <button onClick={() => handleViewBooks(cat.categoryId)} style={styles.btn}>📚 Sách</button>
-                  <button onClick={() => handleEdit(cat)} style={styles.btn}>✏️ Sửa</button>
-                  <button onClick={() => handleDelete(cat.categoryId)} style={{ ...styles.btn, background: '#e74c3c' }}>
-                    🗑️ Xóa
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p style={{ textAlign: 'center' }}><i>Chưa có danh mục nào.</i></p>
-        )}
-      </div>
-    </div>
+        <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
+          <DialogTitle>{isEditing ? 'Edit Category' : 'Create New Category'}</DialogTitle>
+          <DialogContent>
+            <Box display="flex" flexDirection="column" gap={2} mt={1}>
+              <TextField
+                label="Name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                fullWidth
+              />
+              <TextField
+                label="Description"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                fullWidth
+                multiline
+                rows={3}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpen(false)}>Cancel</Button>
+            <Button variant="contained" onClick={handleSubmit}>
+              {isEditing ? 'Update' : 'Create'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </MainLayout>
   );
 }
-
-const styles = {
-  wrapper: {
-    minHeight: '100vh',
-    display: 'flex',
-    justifyContent: 'center',
-    paddingTop: 40,
-    background: '#f0f2f5',
-  },
-  container: {
-    width: '100%',
-    maxWidth: 600,
-    background: 'white',
-    borderRadius: 10,
-    padding: 24,
-    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-  },
-  heading: {
-    textAlign: 'center',
-    marginBottom: 24,
-    color: '#2c3e50',
-  },
-  formSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-    marginBottom: 24,
-  },
-  input: {
-    padding: 10,
-    borderRadius: 6,
-    border: '1px solid #ccc',
-    fontSize: 16,
-  },
-  createBtn: {
-    padding: 10,
-    fontSize: 16,
-    borderRadius: 6,
-    border: 'none',
-    backgroundColor: '#3498db',
-    color: 'white',
-    cursor: 'pointer',
-  },
-  list: {
-    listStyle: 'none',
-    padding: 0,
-    margin: 0,
-  },
-  card: {
-    background: '#f9f9f9',
-    border: '1px solid #ddd',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  cardTitle: {
-    margin: 0,
-    marginBottom: 6,
-    color: '#2c3e50',
-  },
-  btnGroup: {
-    display: 'flex',
-    gap: 10,
-    marginTop: 10,
-  },
-  btn: {
-    flex: 1,
-    padding: 8,
-    borderRadius: 6,
-    border: 'none',
-    backgroundColor: '#2ecc71',
-    color: 'white',
-    cursor: 'pointer',
-  },
-};

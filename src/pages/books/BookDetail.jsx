@@ -1,37 +1,73 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { IconButton, Tooltip } from "@mui/material";
+import FavoriteIcon from "@mui/icons-material/Favorite";
+import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import { getToken } from "../../services/localStorageService";
+import RelatedBookList from "../../features/books/components/RelatedBookList";
 
 function BookDetail() {
   const { bookId } = useParams();
   const navigate = useNavigate();
   const [book, setBook] = useState(null);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
     const fetchBook = async () => {
       try {
+        const token = getToken();
+        // Fetch book details
         const res = await axios.get(`http://localhost:8080/spring/books/${bookId}`, {
-          headers: {
-            Authorization: `Bearer ${getToken()}`
-          }
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
         });
         setBook(res.data?.status);
+
+        // Check if favorite (only if logged in)
+        if (token) {
+          const favRes = await axios.get(`http://localhost:8080/spring/favorites/check/${bookId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setIsFavorite(favRes.data?.status);
+        }
       } catch (err) {
-        console.error("Không lấy được chi tiết sách:", err);
-        navigate("/");
+        console.error("Error fetching book/favorite status:", err);
+        if (!book) navigate("/");
       }
     };
 
     fetchBook();
-  }, [bookId, navigate]);
+  }, [bookId, navigate, book]);
+
+  const toggleFavorite = async () => {
+    const token = getToken();
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    try {
+      await axios.post(`http://localhost:8080/spring/favorites/${bookId}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setIsFavorite(!isFavorite);
+    } catch (err) {
+      console.error("Error toggling favorite:", err);
+    }
+  };
 
   if (!book) return <p style={{ textAlign: "center", marginTop: 50 }}>Đang tải thông tin sách...</p>;
 
   return (
     <div style={styles.wrapper}>
       <div style={styles.card}>
-        <h2 style={styles.title}>📖 {book.title}</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={styles.title}>📖 {book.title}</h2>
+          <Tooltip title={isFavorite ? "Remove from Favorites" : "Add to Favorites"}>
+            <IconButton onClick={toggleFavorite} color="error">
+              {isFavorite ? <FavoriteIcon fontSize="large" /> : <FavoriteBorderIcon fontSize="large" />}
+            </IconButton>
+          </Tooltip>
+        </div>
 
         <p><strong>Tác giả:</strong> {book.author}</p>
         <p><strong>Mô tả:</strong> {book.description}</p>
@@ -47,7 +83,7 @@ function BookDetail() {
                 <img
                   key={idx}
                   src={url}
-                  alt={`book-image-${idx}`}
+                  alt={`book-${idx}`}
                   width={150}
                   style={styles.image}
                   onError={(e) => { e.target.style.display = "none"; }}
@@ -58,6 +94,8 @@ function BookDetail() {
         )}
 
         <button onClick={() => navigate(-1)} style={styles.backBtn}>⬅️ Quay lại</button>
+
+        <RelatedBookList bookId={bookId} />
       </div>
     </div>
   );
@@ -81,7 +119,7 @@ const styles = {
     width: "100%",
   },
   title: {
-    marginBottom: 20,
+    marginBottom: 0,
     color: "#2c3e50",
   },
   imageWrapper: {

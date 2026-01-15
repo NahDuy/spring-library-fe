@@ -2,292 +2,236 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
-    Box, Typography, Button, TextField,
-    Card, CardContent, CardMedia
+    Box, Typography, Button, TextField, Grid,
+    Divider, Chip
 } from "@mui/material";
-import Header from "../../components/header/Header";
+import MainLayout from "../../components/layout/MainLayout";
+import GlassCard from "../../components/common/GlassCard";
+import BookCard from "../../features/books/components/BookCard";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
 import { getToken } from "../../services/localStorageService";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import FavoriteIcon from "@mui/icons-material/Favorite";
+import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
+import { IconButton, Tooltip } from "@mui/material";
+import { useToggleFavorite } from "../../features/favorites/hooks/useFavorites";
+
+import { useToast } from "../../context/ToastContext";
 
 export default function BookInfo() {
     const { bookId } = useParams();
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const [book, setBook] = useState(null);
     const [relatedBooks, setRelatedBooks] = useState([]);
     const [rentQuantity, setRentQuantity] = useState(1);
+    const [loading, setLoading] = useState(true);
+    const [isFavorite, setIsFavorite] = useState(false);
+    const { toggle } = useToggleFavorite();
 
-    const [cart, setCart] = useState(() => {
-        const saved = localStorage.getItem("cart");
-        return saved ? JSON.parse(saved) : [];
-    });
-
-    useEffect(() => {
-        localStorage.setItem("cart", JSON.stringify(cart));
-    }, [cart]);
-
+    // Fetch Book
+    // Fetch Book & Favorite Status
     useEffect(() => {
         const fetchBook = async () => {
+            setLoading(true);
             try {
+                const token = getToken();
                 const res = await axios.get(`http://localhost:8080/spring/books/${bookId}`, {
-                    headers: { Authorization: `Bearer ${getToken()}` }
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
                 });
                 setBook(res.data?.status);
+
+                if (token) {
+                    try {
+                        // Check if favorite
+                        const favRes = await axios.get(`http://localhost:8080/spring/favorites/check/${bookId}`, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                        setIsFavorite(favRes.data?.status);
+                    } catch (ignore) { /* Ignore if check fails */ }
+                }
             } catch (err) {
-                console.error("Không lấy được chi tiết sách:", err);
-                navigate("/");
+                console.error("Book fetch error:", err);
+                navigate("/"); // Return home on error
+            } finally {
+                setLoading(false);
             }
         };
         fetchBook();
     }, [bookId, navigate]);
 
+    const handleToggleFavorite = async () => {
+        const token = getToken();
+        if (!token) {
+            navigate("/login");
+            return;
+        }
+        const success = await toggle(bookId);
+        if (success) setIsFavorite(!isFavorite);
+    };
+
+    // Fetch Related
     useEffect(() => {
-        const fetchRelatedBooks = async () => {
-            if (!book?.category?.categoryId) return;
+        if (!book?.category?.categoryId) return;
+        const fetchRelated = async () => {
             try {
                 const res = await axios.get(
                     `http://localhost:8080/spring/books/related/${book.category.categoryId}`,
-                    {
-                        headers: { Authorization: `Bearer ${getToken()}` }
-                    }
+                    { headers: { Authorization: `Bearer ${getToken()}` } }
                 );
                 const all = res.data?.status || [];
-                const filtered = all.filter((b) => b.bookID !== book.bookID);
-                setRelatedBooks(filtered);
-            } catch (err) {
-                console.error("Lỗi lấy sách cùng thể loại:", err);
-            }
-        };
-        fetchRelatedBooks();
-    }, [book]);
-
-    const fetchUserId = async () => {
-        try {
-            const res = await axios.get("http://localhost:8080/spring/users/myInfo", {
-                headers: { Authorization: `Bearer ${getToken()}` },
-            });
-            const data = res.data;
-            return data.code === 1000 ? data.status.id : null;
-        } catch (err) {
-            console.error("Lỗi khi lấy userId:", err);
-            return null;
+                setRelatedBooks(all.filter(b => b.bookID !== book.bookID));
+            } catch (e) { console.error(e) }
         }
-    };
+        fetchRelated();
+    }, [book]);
 
     const handleAddToCart = async () => {
         try {
-            const userId = await fetchUserId();
-            if (!userId) {
-                alert("Vui lòng đăng nhập để thuê sách!");
-                navigate("/login");
-                return;
-            }
-
-            const loanRes = await axios.post(
-                `http://localhost:8080/spring/loans/user/${userId}/auto-create`,
-                {},
-                { headers: { Authorization: `Bearer ${getToken()}` } }
-            );
-
-            if (!loanRes.data?.status?.loanId) {
-                alert("Không thể tạo hoặc lấy Loan.");
-                return;
-            }
-
-            const loanId = loanRes.data.status.loanId;
-
-            const addRes = await axios.post(
-                `http://localhost:8080/spring/loan-details/add`,
+            await axios.post(
+                "http://localhost:8080/spring/cart/add",
                 {
-                    loanId: loanId,
                     bookId: book.bookID,
                     quantity: rentQuantity
                 },
-                { headers: { Authorization: `Bearer ${getToken()}` } }
+                {
+                    headers: { Authorization: `Bearer ${getToken()}` }
+                }
             );
 
-            if (addRes.data?.code === 1000) {
-                alert(`Đã thêm ${rentQuantity} cuốn "${book.title}" vào giỏ hàng.`);
-            } else {
-                alert("Thêm sách vào giỏ thất bại.");
-            }
-        } catch (err) {
-            console.error("Lỗi khi thêm vào giỏ:", err);
-            alert("Không thể thêm sách vào giỏ.");
+            showToast(`Added "${book.title}" to cart!`, "success");
+        } catch (e) {
+            console.error(e);
+            showToast("Failed to add to cart. Please login.", "error");
         }
     };
 
     const handleRentNow = async () => {
         try {
-            const userId = await fetchUserId();
-            if (!userId) {
-                alert("Vui lòng đăng nhập để thuê sách!");
-                navigate("/login");
-                return;
-            }
-
-            const loanRes = await axios.post(
-                `http://localhost:8080/spring/loans/user/${userId}/auto-create`,
-                {},
-                { headers: { Authorization: `Bearer ${getToken()}` } }
-            );
-
-            if (!loanRes.data?.status?.loanId) {
-                alert("Không thể tạo hoặc lấy Loan.");
-                return;
-            }
-
-            const loanId = loanRes.data.status.loanId;
-
-            const addRes = await axios.post(
-                `http://localhost:8080/spring/loan-details/add`,
+            await axios.post(
+                "http://localhost:8080/spring/cart/add",
                 {
-                    loanId: loanId,
                     bookId: book.bookID,
                     quantity: rentQuantity
                 },
-                { headers: { Authorization: `Bearer ${getToken()}` } }
-            );
-
-            if (addRes.data?.code !== 1000) {
-                alert("Không thể thêm sách vào đơn mượn.");
-                return;
-            }
-
-            await axios.put(
-                `http://localhost:8080/spring/loans/${loanId}/status`,
-                null,
                 {
-                    params: { status: "CONFIRMED" },
                     headers: { Authorization: `Bearer ${getToken()}` }
                 }
             );
-
-            alert("Thuê sách thành công!");
-            navigate("/confirmed-loans");
-
-        } catch (err) {
-            console.error("Lỗi khi thuê ngay:", err);
-            alert("Không thể thuê sách.");
+            navigate("/cart");
+        } catch (e) {
+            console.error(e);
+            showToast("Failed to rent.", "error");
         }
     };
 
-    if (!book) {
-        return <p style={{ textAlign: "center", marginTop: 50 }}>Đang tải thông tin sách...</p>;
-    }
+    if (loading || !book) return <LoadingSpinner />;
 
     return (
-        <>
-            <Header cartCount={cart.reduce((total, item) => total + item.quantity, 0)} />
-            <Box sx={styles.container}>
-                <Box sx={styles.card}>
-                    <Typography variant="h4" fontWeight="bold" gutterBottom>
-                        {book.title}
-                    </Typography>
-                    <Typography gutterBottom><strong>Tác giả:</strong> {book.author}</Typography>
-                    <Typography gutterBottom><strong>Mô tả:</strong> {book.description}</Typography>
-                    <Typography gutterBottom>
-                        <strong>Số lượng còn:</strong> {book.availableCopies}/{book.totalCopies}
-                    </Typography>
+        <MainLayout>
+            <Grid container spacing={4} sx={{ mb: 6 }}>
+                {/* Image Section */}
+                <Grid item xs={12} md={4}>
+                    <GlassCard sx={{ p: 2, display: "flex", justifyContent: "center", alignItems: "center", minHeight: 400 }}>
+                        {book.imageUrls?.[0] ? (
+                            <Box
+                                component="img"
+                                src={book.imageUrls[0]}
+                                sx={{
+                                    maxWidth: "100%",
+                                    maxHeight: 450,
+                                    borderRadius: 2,
+                                    boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
+                                }}
+                            />
+                        ) : (
+                            <Box sx={{ width: "100%", height: 300, bgcolor: "grey.100", display: "flex", alignItems: "center", justifyContent: "center" }}>No Image</Box>
+                        )}
+                    </GlassCard>
+                </Grid>
 
-                    {book.imageUrls?.[0] && (
-                        <img
-                            src={book.imageUrls[0]}
-                            alt="Ảnh sách"
-                            style={styles.image}
-                            onError={(e) => (e.target.style.display = "none")}
-                        />
-                    )}
-
-                    <Box mt={3} display="flex" alignItems="center" gap={2}>
-                        <Typography>Chọn số lượng:</Typography>
-                        <TextField
-                            type="number"
-                            size="small"
-                            inputProps={{
-                                min: 1,
-                                max: book.availableCopies,
-                            }}
-                            value={rentQuantity}
-                            onChange={(e) => {
-                                const val = Number(e.target.value);
-                                if (val > 0 && val <= book.availableCopies) {
-                                    setRentQuantity(val);
-                                }
-                            }}
-                            sx={{ width: 100 }}
-                        />
-                        <Button variant="outlined" color="secondary" onClick={handleAddToCart}>
-                            🛒 Thêm vào giỏ
+                {/* Details Section */}
+                <Grid item xs={12} md={8}>
+                    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ alignSelf: "flex-start", mb: 2 }}>
+                            Back
                         </Button>
-                        <Button variant="contained" color="primary" onClick={handleRentNow}>
-                            🚀 Thuê ngay
-                        </Button>
-                        <Button onClick={() => navigate(-1)} variant="outlined">
-                            ⬅️ Quay lại
-                        </Button>
-                    </Box>
-                </Box>
-
-                {relatedBooks.length > 0 && (
-                    <Box sx={{ mt: 6, maxWidth: "800px", width: "100%" }}>
-                        <Typography variant="h6" gutterBottom>
-                            📚 Các sách cùng thể loại
+                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                            <Typography variant="h3" fontWeight={800} sx={{ color: "primary.main", mb: 1 }}>
+                                {book.title}
+                            </Typography>
+                            <Tooltip title={isFavorite ? "Remove from Favorites" : "Add to Favorites"}>
+                                <IconButton onClick={handleToggleFavorite} color="error" size="large">
+                                    {isFavorite ? <FavoriteIcon fontSize="large" /> : <FavoriteBorderIcon fontSize="large" />}
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                        <Typography variant="h5" color="text.secondary" gutterBottom>
+                            by {book.author}
                         </Typography>
-                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
-                            {relatedBooks.map((b) => (
-                                <Card
-                                    key={b.bookID}
-                                    sx={{ width: 180, cursor: "pointer" }}
-                                    onClick={() => navigate(`/book-info/${b.bookID}`)}
-                                >
-                                    {b.imageUrls?.[0] && (
-                                        <CardMedia
-                                            component="img"
-                                            height="140"
-                                            image={b.imageUrls[0]}
-                                            alt={b.title}
-                                            onError={(e) => (e.target.style.display = "none")}
-                                        />
-                                    )}
-                                    <CardContent>
-                                        <Typography variant="subtitle2" fontWeight="bold">
-                                            {b.title}
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            {b.author}
-                                        </Typography>
-                                    </CardContent>
-                                </Card>
-                            ))}
+
+                        <Box sx={{ display: "flex", gap: 1, my: 2 }}>
+                            <Chip label={book.categoryName || "Book"} color="primary" variant="outlined" />
+                            <Chip label={book.availableCopies > 0 ? "In Stock" : "Out of Stock"} color={book.availableCopies > 0 ? "success" : "error"} />
+                        </Box>
+
+                        <Typography variant="body1" paragraph sx={{ lineHeight: 1.8, fontSize: "1.1rem", color: "text.primary" }}>
+                            {book.description || "No description available for this book."}
+                        </Typography>
+
+                        <Divider sx={{ my: 3 }} />
+
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap" }}>
+                            <TextField
+                                label="Quantity"
+                                type="number"
+                                size="small"
+                                inputProps={{ min: 1, max: book.availableCopies }}
+                                value={rentQuantity}
+                                onChange={(e) => setRentQuantity(Math.max(1, Math.min(book.availableCopies, Number(e.target.value))))}
+                                sx={{ width: 100 }}
+                            />
+
+                            <Button
+                                variant="contained"
+                                size="large"
+                                startIcon={<ShoppingCartIcon />}
+                                onClick={handleAddToCart}
+                                disabled={book.availableCopies === 0}
+                            >
+                                Add to Cart
+                            </Button>
+
+                            <Button
+                                variant="outlined"
+                                size="large"
+                                startIcon={<RocketLaunchIcon />}
+                                onClick={handleRentNow}
+                                disabled={book.availableCopies === 0}
+                            >
+                                Rent Now
+                            </Button>
                         </Box>
                     </Box>
-                )}
-            </Box>
-        </>
+                </Grid>
+            </Grid>
+
+            {relatedBooks.length > 0 && (
+                <Box>
+                    <Typography variant="h5" fontWeight={700} gutterBottom sx={{ borderLeft: "4px solid #ffca28", pl: 2 }}>
+                        You might also like
+                    </Typography>
+                    <Grid container spacing={3} sx={{ mt: 1 }}>
+                        {relatedBooks.map((b) => (
+                            <Grid item xs={6} sm={4} md={3} key={b.bookID}>
+                                <BookCard book={b} />
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Box>
+            )}
+        </MainLayout>
     );
 }
-
-const styles = {
-    container: {
-        minHeight: "100vh",
-        backgroundColor: "#f4f6f9",
-        padding: "120px 24px 40px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-    },
-    card: {
-        background: "#fff",
-        padding: 32,
-        borderRadius: 12,
-        maxWidth: 800,
-        width: "100%",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-    },
-    image: {
-        width: "100%",
-        maxHeight: 280,
-        objectFit: "cover",
-        marginTop: 16,
-        borderRadius: 8,
-    },
-};

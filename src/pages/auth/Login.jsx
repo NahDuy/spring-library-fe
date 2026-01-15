@@ -1,45 +1,36 @@
 import {
   Box,
-  Button,
-  Card,
   CardContent,
   Divider,
   TextField,
   Typography,
-  Snackbar,
-  Alert,
+  Paper
 } from "@mui/material";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getToken, setToken } from "../../services/localStorageService";
+import { setToken } from "../../services/localStorageService";
+import PremiumButton from "../../components/common/PremiumButton";
+
+import { useToast } from "../../context/ToastContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [snackBarOpen, setSnackBarOpen] = useState(false);
-  const [snackBarMessage, setSnackBarMessage] = useState("");
 
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [dob, setDob] = useState("");
-  const [joinDate] = useState(new Date().toISOString());
 
-  useEffect(() => {
-    const accessToken = getToken();
-    if (accessToken) {
-      navigate("/");
-    }
-  }, [navigate]);
 
-  const handleCloseSnackBar = (event, reason) => {
-    if (reason === "clickaway") return;
-    setSnackBarOpen(false);
-  };
+  // ... useEffect
+
+  // Removed handleCloseSnackBar
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -52,11 +43,11 @@ export default function Login() {
       .then((data) => {
         if (data.code !== 1000) throw new Error(data.message);
         setToken(data.status?.token);
+        showToast("Login successful!", "success");
         navigate("/");
       })
       .catch((err) => {
-        setSnackBarMessage(err.message);
-        setSnackBarOpen(true);
+        showToast(err.message, "error");
       });
   };
 
@@ -69,8 +60,8 @@ export default function Login() {
       name,
       email,
       address,
-      joinDate,
-      dob,
+      joinDate: new Date().toISOString().split('T')[0], // yyyy-MM-dd
+      dob: dob ? dob : null,
     };
 
     fetch("http://localhost:8080/spring/users", {
@@ -81,149 +72,138 @@ export default function Login() {
       .then((res) => res.json())
       .then((data) => {
         if (data.code !== 1000) throw new Error(data.message);
-        alert("Đăng ký thành công. Vui lòng đăng nhập.");
+        showToast("Registration successful. Please login.", "success");
         setIsRegistering(false);
       })
       .catch((err) => {
-        setSnackBarMessage(err.message);
-        setSnackBarOpen(true);
+        showToast(err.message, "error");
       });
   };
 
   return (
-    <>
-      <Snackbar
-        open={snackBarOpen}
-        onClose={handleCloseSnackBar}
-        autoHideDuration={6000}
-        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(135deg, #1a237e 0%, #0d47a1 50%, #534bae 100%)",
+        p: 2
+      }}
+    >
+      <Paper
+        elevation={24}
+        sx={{
+          width: "100%",
+          maxWidth: 480,
+          borderRadius: 4,
+          overflow: "hidden",
+          position: "relative"
+        }}
       >
-        <Alert
-          onClose={handleCloseSnackBar}
-          severity="error"
-          variant="filled"
-          sx={{ width: "100%" }}
-        >
-          {snackBarMessage}
-        </Alert>
-      </Snackbar>
+        {/* Header Strip */}
+        <Box sx={{ bgcolor: "primary.main", p: 3, textAlign: "center" }}>
+          <Typography variant="h5" color="white" fontWeight="bold">
+            {isRegistering ? "Create Account" : "Welcome Back"}
+          </Typography>
+          <Typography variant="body2" color="rgba(255,255,255,0.8)">
+            Spring Library App
+          </Typography>
+        </Box>
 
-      <Box
-        display="flex"
-        flexDirection="column"
-        alignItems="center"
-        justifyContent="center"
-        height="100vh"
-        bgcolor="#eef1f5"
-        px={2}
-      >
-        <Card
-          sx={{
-            minWidth: 360,
-            maxWidth: 480,
-            width: "100%",
-            boxShadow: 6,
-            borderRadius: 3,
-            p: 4,
-            background: "#fff",
-          }}
-        >
-          <CardContent>
-            <Typography
-              variant="h5"
-              component="h1"
-              textAlign="center"
-              gutterBottom
-              sx={{ color: "#2c3e50", fontWeight: 600 }}
+        <CardContent sx={{ p: 4 }}>
+          <Box
+            component="form"
+            display="flex"
+            flexDirection="column"
+            gap={2.5}
+            onSubmit={isRegistering ? handleRegister : handleSubmit}
+          >
+            <TextField
+              label="Username"
+              variant="outlined"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              fullWidth
+              required
+            />
+            <TextField
+              label="Password"
+              type="password"
+              variant="outlined"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              fullWidth
+              required
+            />
+
+            {isRegistering && (
+              <>
+                <TextField
+                  label="Full Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  fullWidth
+                  required
+                />
+                <TextField
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  fullWidth
+                  required
+                />
+                <TextField
+                  label="Address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  fullWidth
+                />
+                <TextField
+                  label="Date of Birth"
+                  type="date"
+                  InputLabelProps={{ shrink: true }}
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  fullWidth
+                />
+              </>
+            )}
+
+            <PremiumButton
+              type="submit"
+              variant="contained"
+              fullWidth
+              style={{ marginTop: '16px' }}
             >
-              {isRegistering ? "Đăng ký tài khoản" : "Chào mừng đến thư viện"}
-            </Typography>
+              {isRegistering ? "Sign Up" : "Login"}
+            </PremiumButton>
+          </Box>
 
-            <Box
-              component="form"
-              display="flex"
-              flexDirection="column"
-              gap={2}
-              onSubmit={isRegistering ? handleRegister : handleSubmit}
+          <Divider sx={{ my: 3 }}>
+            <Typography variant="caption" color="text.secondary">OR</Typography>
+          </Divider>
+
+          <Box display="flex" flexDirection="column" gap={1.5} alignItems="center">
+            <PremiumButton
+              variant="outlined"
+              fullWidth
+              onClick={() => setIsRegistering(!isRegistering)}
             >
-              <TextField
-                label="Tên đăng nhập"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                fullWidth
-              />
-              <TextField
-                label="Mật khẩu"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                fullWidth
-              />
+              {isRegistering ? "Already have an account? Login" : "Create New Account"}
+            </PremiumButton>
 
-              {isRegistering && (
-                <>
-                  <TextField
-                    label="Họ tên"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    fullWidth
-                  />
-                  <TextField
-                    label="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    fullWidth
-                  />
-                  <TextField
-                    label="Địa chỉ"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    fullWidth
-                  />
-                  <TextField
-                    label="Ngày sinh"
-                    type="date"
-                    InputLabelProps={{ shrink: true }}
-                    value={dob}
-                    onChange={(e) => setDob(e.target.value)}
-                    fullWidth
-                  />
-                </>
-              )}
-
-              <Button
-                type="submit"
-                variant="contained"
-                color="primary"
-                size="large"
-                fullWidth
-              >
-                {isRegistering ? "Đăng ký" : "Đăng nhập"}
-              </Button>
-            </Box>
-
-            <Divider sx={{ my: 3 }} />
-
-            <Box display="flex" flexDirection="column" gap={1}>
-              <Button
-                variant="outlined"
-                color="secondary"
-                fullWidth
-                onClick={() => setIsRegistering(!isRegistering)}
-              >
-                {isRegistering ? "Quay lại đăng nhập" : "Tạo tài khoản mới"}
-              </Button>
-              <Button
-                variant="text"
-                size="small"
-                onClick={() => navigate("/forgot-password")}
-              >
-                Quên mật khẩu?
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      </Box>
-    </>
+            <PremiumButton
+              variant="text"
+              style={{ fontSize: '0.875rem', textDecoration: 'underline' }}
+              onClick={() => navigate("/forgot-password")}
+            >
+              Forgot Password?
+            </PremiumButton>
+          </Box>
+        </CardContent>
+      </Paper>
+    </Box>
   );
 }
